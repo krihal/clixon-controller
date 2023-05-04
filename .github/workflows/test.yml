@@ -15,20 +15,20 @@ jobs:
       run: (git clone https://github.com/clicon/clixon-controller.git && cd clixon-controller/docker/ && git checkout docker && docker build -t clixon-controller .)
 # 2)  Run tests
     - name: Start devices
-      run: (cd test; ./start-devices.sh)    
+      run: cd test; ./start-devices.sh
     - name: Get container addresses
-      run: (cd test; CONTAINERS=`./containers.sh`; export CONTAINERS)
+      run: CONTAINERS=`./containers.sh`; export CONTAINERS
     - name: Start controller container
-      run: (cd test; ./start-controller.sh)
+      run: ./start-controller.sh
     - name: Run test-change-both
-      run: (cd test; PREFIX=sudo ./test-change-both.sh)
+      run: PREFIX=sudo ./test-change-both.sh
     - name: Run test-change-ctrl-push
-      run: (cd test; PREFIX=sudo ./test-change-ctrl-push.sh)
+      run: PREFIX=sudo ./test-change-ctrl-push.sh
     - name: Run test-change-device-diff
-      run: (cd test; PREFIX=sudo ./test-change-device-diff.sh)
+      run: PREFIX=sudo ./test-change-device-diff.sh
     - name: Run test-cli-edit-commit-push
-      run: (cd test; ./test-cli-edit-commit-push.sh)
+      run: ./test-cli-edit-commit-push.sh
     - name: Run test-service
-      run: (cd test; PREFIX=sudo ./test-service.sh)
+      run: PREFIX=sudo ./test-service.sh
     - name: Run test-yanglib
-      run: (cd test; PREFIX=sudo ./test-yanglib.sh)
+      run: PREFIX=sudo ./test-yanglib.sh
