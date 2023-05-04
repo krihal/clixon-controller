@@ -17,7 +17,7 @@ jobs:
     - name: Start devices
       run: cd clixon-controller/test; ./start-devices.sh
     - name: Get container addresses
-      run: cd clixon-controller/test; CONTAINERS=`./containers.sh`; echo "CONTAINERS=\"$CONTAINERS\"" >> "$GITHUB_ENV"
+      run: cd clixon-controller/test; CONTAINERS=`./containers.sh`; echo "CONTAINERS=$CONTAINERS >> "$GITHUB_ENV"
     - name: Start controller container
       run: cd clixon-controller/test; ./start-controller.sh
     - name: Run test-change-both
