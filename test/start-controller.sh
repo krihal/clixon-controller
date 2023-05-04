@@ -7,7 +7,7 @@ set -e
 
 : ${sleep:=5}
 
-sudo docker run --name $NAME --rm -td -e $CONTAINERS $IMG
+sudo docker run --name $NAME --rm -td -e CONTAINERS="$CONTAINERS" $IMG
 
 sleep $sleep # need time to spin up backend in containers
 
