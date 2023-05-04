@@ -17,11 +17,11 @@ jobs:
     - name: Start devices
       run: cd clixon-controller/test; ./start-devices.sh
     - name: Get container addresses
-      run: cd clixon-controller/test; CONTAINERS=`./containers.sh`; export CONTAINERS
+      run: cd clixon-controller/test; CONTAINERS=`./containers.sh`; echo "CONTAINERS=\"$CONTAINERS\"" >> "$GITHUB_ENV"
     - name: Start controller container
       run: cd clixon-controller/test; ./start-controller.sh
     - name: Run test-change-both
-      run: cd clixon-controller/test; PREFIX=sudo ./test-change-both.sh
+      run: cd clixon-controller/test; CONTROLLERS=${{ env.controllers }} PREFIX=sudo ./test-change-both.sh
     - name: Run test-change-ctrl-push
       run: cd clixon-controller/test; PREFIX=sudo ./test-change-ctrl-push.sh
     - name: Run test-change-device-diff
