@@ -3,6 +3,7 @@
 set -e
 
 : ${NAME:=clixon-controller:latest}
+: ${IMG:=clixon-controller:latest}
 
 : ${sleep:=5}
 
