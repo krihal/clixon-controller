@@ -32,7 +32,6 @@ i=1
 
 # Add parameters x and y
 for i in $(seq 1 $nr); do
-    i=((i+1)
     NAME=$IMG$i
     ip=$(docker inspect $NAME -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
     ssh -l root $ip -o StrictHostKeyChecking=no -o PasswordAuthentication=no -s netconf <<EOF
