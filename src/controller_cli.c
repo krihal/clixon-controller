@@ -1357,16 +1357,22 @@ controller_cligen_treeref_wrap(cligen_handle ch,
 {
     int           retval = -1;
     cg_var       *cv;
-    cg_var       *cvdev;
+    cg_var       *cvdev = NULL;
     char         *devname;
     char         *treename2;
     cbuf         *cb = NULL;
     yang_stmt    *yspec1 = NULL;
     clicon_handle h;
+    cvec         *cvv_edit;
 
     h = cligen_userhandle(ch);
-    if (strcmp(name, "mountpoint") == 0){
-        /* Ad-hoc: find "device" token in cvt */
+    if (strcmp(name, "mountpoint") != 0)
+        goto ok;
+    cvv_edit = clicon_data_cvec_get(h, "cli-edit-cvv");
+    /* Ad-hoc: find "name" variable in edit mode cvv, else "device" token */
+    if (cvv_edit && (cvdev = cvec_find(cvv_edit, "name")) != NULL)
+        ;
+    else{
         cv = NULL;
         while ((cv = cvec_each(cvt, cv)) != NULL){
             if (strcmp(cv_string_get(cv), "device") == 0)
@@ -1376,44 +1382,134 @@ controller_cligen_treeref_wrap(cligen_handle ch,
             goto ok;
         if ((cvdev = cvec_next(cvt, cv)) == NULL)
             goto ok;
-        if ((devname = cv_string_get(cvdev)) == NULL)
-            goto ok;
-        if ((cb = cbuf_new()) == NULL){
-            clicon_err(OE_UNIX, errno, "cbuf_new");
-            goto done;
-        }
-        cprintf(cb, "mountpoint-%s", devname);
-        treename2 = cbuf_get(cb);
-        /* Does this tree exist? */
-        if (cligen_ph_find(ch, treename2) == NULL){
-            if (create_autocli_mount_tree(h, devname, treename2, &yspec1) < 0)
-                goto done;
-            if (yspec1 == NULL){
-                clicon_err(OE_YANG, 0, "No yang spec");
-                goto done;
-            }
-            /* Generate auto-cligen tree from the specs */
-            if (yang2cli_yspec(h, yspec1, treename2, 0) < 0)
-                goto done;
-            /* Sanity */
-            if (cligen_ph_find(ch, treename2) == NULL){
-                clicon_err(OE_YANG, 0, "autocli should have  been generated but is not?");
-                goto done;
-            }
-        }
-        if (namep &&
-            (*namep = strdup(treename2)) == NULL){
-            clicon_err(OE_UNIX, errno, "strdup");
-            goto done;
-        }
-        retval = 1;
+    }
+    if ((devname = cv_string_get(cvdev)) == NULL)
+        goto ok;
+    if ((cb = cbuf_new()) == NULL){
+        clicon_err(OE_UNIX, errno, "cbuf_new");
         goto done;
     }
+    cprintf(cb, "mountpoint-%s", devname);
+    treename2 = cbuf_get(cb);
+    /* Does this tree exist? */
+    if (cligen_ph_find(ch, treename2) == NULL){
+        if (create_autocli_mount_tree(h, devname, treename2, &yspec1) < 0)
+            goto done;
+        if (yspec1 == NULL){
+            clicon_err(OE_YANG, 0, "No yang spec");
+            goto done;
+        }
+        /* Generate auto-cligen tree from the specs */
+        if (yang2cli_yspec(h, yspec1, treename2, 0) < 0)
+            goto done;
+        /* Sanity */
+        if (cligen_ph_find(ch, treename2) == NULL){
+            clicon_err(OE_YANG, 0, "autocli should have  been generated but is not?");
+            goto done;
+        }
+    }
+    if (namep &&
+        (*namep = strdup(treename2)) == NULL){
+        clicon_err(OE_UNIX, errno, "strdup");
+        goto done;
+    }
+    retval = 1;
+ done:
+    if (cb)
+        cbuf_free(cb);
+    return retval;
+ ok:
+    retval = 0;
+    goto done;
+}
+
+/*! YANG schema mount
+ *
+ * Given an XML mount-point xt, return XML yang-lib modules-set
+ * Return yanglib as XML tree on the RFC8525 form: 
+ *   <yang-library>
+ *      <module-set>
+ *         <module>...</module>
+ *         ...
+ *      </module-set>
+ *   </yang-library>
+ * Get the schema-list for this device from the backend
+ * @param[in]  h       Clixon handle
+ * @param[in]  xt      XML mount-point in XML tree
+ * @param[out] config  If '0' all data nodes in the mounted schema are read-only
+ * @param[out] vallevel Do or dont do full RFC 7950 validation
+ * @param[out] yanglib XML yang-lib module-set tree. Freed by caller.
+ * @retval     0       OK
+ * @retval    -1       Error
+ * @see RFC 8528 (schema-mount) and RFC 8525 (yang-lib)
+ * @see device_send_get_schema_list/device_state_recv_schema_list Backend fns for send/rcv
+ * XXX 1. Recursion in clicon_rpc_get
+ * XXX 2. Cache somewhere?
+ */
+int
+controller_cli_yang_mount(clicon_handle   h,
+                          cxobj          *xm,
+                          int            *config,
+                          validate_level *vl, 
+                          cxobj         **yanglib)
+{
+    int    retval = -1;
+    cxobj *xt = NULL;
+    cxobj *xerr = NULL;
+    cxobj *xmodset;
+    cvec  *nsc = NULL;
+    char  *xpath = NULL;
+    cbuf  *cb = NULL;    
+    char  *str;
+    static int recursion = 0; /* clicon_rpc_get() -> bind back to here */
+
+    if (recursion)
+        goto ok;
+    if ((cb = cbuf_new()) == NULL){
+        clicon_err(OE_XML, errno, "cbuf_new");
+        goto done;
+    }
+    if (xml_nsctx_node(xm, &nsc) < 0)
+        goto done;
+    if (xml2xpath(xm, nsc, 1, 1, &xpath) < 0)
+        goto done;
+    /* xm can be rooted somewhere else than "/devices" , such as /rpc-reply */
+    if ((str = strstr(xpath, "/devices/device")) == NULL)
+        goto ok;
+    if (xml_nsctx_add(nsc, "yanglib", "urn:ietf:params:xml:ns:yang:ietf-yang-library") < 0)
+        goto done;
+    cprintf(cb, "%s/yanglib:yang-library/yanglib:module-set[yanglib:name='mount']", str);
+    recursion++;
+    if (clicon_rpc_get(h, cbuf_get(cb), nsc, CONTENT_ALL, -1, "explicit", &xt) < 0){
+        recursion--;
+        goto done;
+    }
+    recursion--;
+    if ((xerr = xpath_first(xt, NULL, "/rpc-error")) != NULL){
+        clixon_netconf_error(xerr, "clicon_rpc_get", NULL);
+        goto done;
+    }
+    if ((xmodset = xpath_first(xt, nsc, "%s", cbuf_get(cb))) == NULL)
+        goto ok;
+    cbuf_reset(cb);
+    cprintf(cb, "<yang-library xmlns=\"urn:ietf:params:xml:ns:yang:ietf-yang-library\"/>");
+    if (clixon_xml_parse_string(cbuf_get(cb), YB_NONE, NULL, yanglib, NULL) < 0)
+        goto done;
+    if (xml_addsub(*yanglib, xmodset) < 0)
+        goto done;
  ok:
     retval = 0;
  done:
     if (cb)
         cbuf_free(cb);
+    if (xpath)
+        free(xpath);
+    if (xt)
+        xml_free(xt);
+    if (xerr)
+        xml_free(xerr);
+    if (nsc)
+        xml_nsctx_free(nsc);
     return retval;
 }
 
@@ -1429,7 +1525,7 @@ controller_cligen_treeref_wrap(cligen_handle ch,
  * @retval    -1       Error
  */
 int
-controller_yang_patch(clicon_handle h,
+controller_cli_yang_patch(clicon_handle h,
                       yang_stmt    *ymod)
 {
     int         retval = -1;
@@ -1470,7 +1566,8 @@ static clixon_plugin_api api = {
     clixon_plugin_init,
     controller_cli_start,
     controller_cli_exit,
-    .ca_yang_patch   = controller_yang_patch,
+    .ca_yang_mount   = controller_cli_yang_mount,
+    .ca_yang_patch   = controller_cli_yang_patch,
 };
 
 /*! CLI plugin initialization
