@@ -541,11 +541,10 @@ transaction_notification_handler(clixon_handle       h,
             goto done;
         }
         if ((result = transaction_result_str2int(resstr)) != TR_SUCCESS){
-            if((clixon_logflags_get() | CLIXON_LOG_STDERR) == 0x0)
-                cligen_output(stderr, "%s: pid: %u Transaction %s failed in %s: %s\n",
-                              __func__, getpid(), tidstr, origin?origin:"unknown", reason?reason:"no reason");
-            clixon_log(h, LOG_NOTICE, "%s: pid: %u Transaction %s failed in %s: %s",
-                       __func__, getpid(), tidstr, origin?origin:"unknown", reason?reason:"no reason");
+            cligen_output(stderr, "Transaction %s failed in %s: %s\n",
+                          tidstr, origin?origin:"unknown", reason?reason:"no reason");
+            clixon_debug(CLIXON_DBG_CTRL, "Transaction %s failed in %s: %s",
+                         tidstr, origin?origin:"unknown", reason?reason:"no reason");
         }
         if ((ret = transaction_exist(h, tidstr0)) < 0)
             goto done;
